@@ -11068,9 +11068,17 @@ static void cmd_anal_aftertraps(RCore *core, const char *input) {
 	free (buf);
 }
 
+static bool call_target_is_mid_instruction(RCore *core, ut64 addr) {
+	RAnalBlock *bb = r_anal_bb_from_offset (core->anal, addr);
+	return bb && r_anal_block_contains (bb, addr) && !r_anal_block_op_starts_at (bb, addr);
+}
+
 static void _anal_calls(RCore *core, ut64 addr, ut64 addr_end, bool printCommands, bool importsOnly) {
 	RAnalOp op = {0};
 	const int depth = r_config_get_i (core->config, "anal.depth");
+	const RAnalOpMask opmask = r_core_anal_archbits_is_static (core)
+		? R_ARCH_OP_MASK_NOARCHBITS
+		: R_ARCH_OP_MASK_BASIC;
 	const int addrbytes = core->io->addrbytes;
 	const int bsz = 4096;
 	int bufi = 0;
@@ -11131,7 +11139,7 @@ static void _anal_calls(RCore *core, ut64 addr, ut64 addr_end, bool printCommand
 				r_config_set_i (core->config, "asm.bits", setBits);
 			}
 		}
-		if (r_anal_op (core->anal, &op, addr, buf + bufi, bsz - bufi, 0) > 0) {
+		if (r_anal_op (core->anal, &op, addr, buf + bufi, bsz - bufi, opmask) > 0) {
 			if (op.size < 1) {
 				op.size = minop;
 			}
@@ -11147,12 +11155,15 @@ static void _anal_calls(RCore *core, ut64 addr, ut64 addr_end, bool printCommand
 				if (rel && (rel->import || rel->symbol)) {
 					isValidCall = false;
 				}
+				if (isValidCall && call_target_is_mid_instruction (core, op.jump)) {
+					R_LOG_DEBUG ("Ignoring call into the middle of an instruction at 0x%08"PFMT64x, op.jump);
+					isValidCall = false;
+				}
 				if (isValidCall) {
 					ut8 zbuf[4] = {0};
-					if (!r_io_read_at (core->io, op.jump, zbuf, 4)) {
-						break;
-					}
-					isValidCall = memcmp (zbuf, "\x00\x00\x00\x00", 4);
+					isValidCall = r_io_is_valid_offset (core->io, op.jump, R_PERM_X)
+						&& r_io_read_at (core->io, op.jump, zbuf, sizeof (zbuf))
+						&& memcmp (zbuf, "\x00\x00\x00\x00", sizeof (zbuf));
 				}
 				if (isValidCall) {
 					if (printCommands) {
@@ -11161,9 +11172,7 @@ static void _anal_calls(RCore *core, ut64 addr, ut64 addr_end, bool printCommand
 					} else {
 						// add xref here
 						r_anal_xrefs_set (core->anal, addr, op.jump, R_ANAL_REF_TYPE_CALL);
-						if (r_io_is_valid_offset (core->io, op.jump, 1)) {
-							r_core_anal_fcn (core, op.jump, addr, R_ANAL_REF_TYPE_CALL, depth - 1);
-						}
+						r_core_anal_fcn (core, op.jump, addr, R_ANAL_REF_TYPE_CALL, depth - 1);
 					}
 				}
 			}

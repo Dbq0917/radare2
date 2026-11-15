@@ -471,9 +471,11 @@ static void cmd_search_ag(RCore *core, const char *input) {
 }
 
 static void prelude_analyze(RCore *core, ut64 addr) {
+	if (r_anal_get_fcn_in (core->anal, addr, 0)) {
+		return;
+	}
 	if (r_config_get_b (core->config, "anal.calls")) {
-		// XXX dont use RCore.cmdf here its slow
-		r_core_cmdf (core, "afr@0x%"PFMT64x, addr);
+		r_core_af (core, addr, NULL, true);
 	} else {
 		int depth = r_config_get_i (core->config, "anal.depth");
 		r_core_anal_fcn (core, addr, -1, R_ANAL_REF_TYPE_NULL, depth);

@@ -105,6 +105,7 @@ typedef enum {
 	R_ARCH_OP_MASK_OPEX  = 8, // fills RAnalop->opex info
 	R_ARCH_OP_MASK_DISASM = 16, // fills RAnalop->mnemonic // should be RAnalOp->disasm // only from r_core_anal_op()
 	R_ARCH_OP_MASK_STATEFUL = 32, // let arch plugins keep cross-insn states. useful for linear code. not included in MASK_ALL
+	R_ARCH_OP_MASK_NOARCHBITS = 64, // skip the per-address arch/bits callback for fixed-arch sweeps
 	R_ARCH_OP_MASK_ALL   = 1 | 2 | 4 | 8 | 16
 } RAnalOpMask;
 

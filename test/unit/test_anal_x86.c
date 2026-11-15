@@ -2,6 +2,34 @@
 #include <r_core.h>
 #include "minunit.h"
 
+static void count_archbits(void *core, ut64 addr) {
+	(void)addr;
+	(*(int *)core)++;
+}
+
+bool test_archbits_mask(void) {
+	RAnal *anal = r_anal_new ();
+	mu_assert_true (r_anal_use (anal, "x86"), "select x86");
+	mu_assert_true (r_anal_set_bits (anal, 64), "set bits");
+	int calls = 0;
+	anal->coreb.core = &calls;
+	anal->coreb.archBits = count_archbits;
+	const ut8 nop = 0x90;
+	RAnalOp op = {0};
+
+	mu_assert_eq (r_anal_op (anal, &op, 0x100, &nop, 1, R_ARCH_OP_MASK_BASIC), 1, "decode");
+	mu_assert_eq (calls, 1, "archbits callback runs by default");
+	r_anal_op_fini (&op);
+
+	calls = 0;
+	mu_assert_eq (r_anal_op (anal, &op, 0x101, &nop, 1, R_ARCH_OP_MASK_NOARCHBITS), 1, "decode");
+	mu_assert_eq (calls, 0, "archbits callback is skipped");
+	r_anal_op_fini (&op);
+
+	r_anal_free (anal);
+	mu_end;
+}
+
 bool test_x86_stack_access(void) {
 	const struct {
 		int bits;
@@ -125,6 +153,7 @@ bool test_x86_cs_frame_pointer(void) {
 }
 
 int all_tests(void) {
+	mu_run_test (test_archbits_mask);
 	mu_run_test (test_x86_stack_access);
 	mu_run_test (test_x86_cs_frame_pointer);
 	return tests_passed != tests_run;

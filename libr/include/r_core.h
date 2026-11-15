@@ -760,6 +760,7 @@ R_API RGraph/*<RGraphNodeInfo>*/ *r_core_anal_codexrefs(RCore *core, ut64 addr);
 R_API RGraph/*<RGraphNodeInfo>*/ *r_core_anal_importxrefs(RCore *core);
 R_API void r_core_anal_callgraph(RCore *core, ut64 addr, int fmt);
 R_API int r_core_anal_refs(RCore *core, const char *input);
+R_IPI bool r_core_anal_archbits_is_static(RCore *core);
 R_API void r_core_agraph_print(RCore *core, int use_utf, const char *input);
 R_API bool r_core_esil_cmd(REsil *esil, const char *cmd, ut64 a1, ut64 a2);
 typedef enum r_core_esil_step_status_t {

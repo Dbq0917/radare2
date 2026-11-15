@@ -28,6 +28,26 @@ static void loganal(ut64 from, ut64 to, int depth) {
 	eprintf (R_CONS_CLEAR_LINE "0x%08"PFMT64x" > 0x%08"PFMT64x" %d\r", from, to, depth);
 }
 
+R_IPI bool r_core_anal_archbits_is_static(RCore *core) {
+	R_RETURN_VAL_IF_FAIL (core, false);
+	if (core->fixedarch && core->fixedbits) {
+		return true;
+	}
+	if (core->anal->arch_hints || core->anal->bits_hints) {
+		return false;
+	}
+	RBinObject *bo = r_bin_cur_object (core->bin);
+	if (bo) {
+		RBinSection *section;
+		R_VEC_FOREACH (&bo->sections_vec, section) {
+			if (section->arch || section->bits) {
+				return false;
+			}
+		}
+	}
+	return true;
+}
+
 static int cmpsize(const void *a, const void *b) {
 	ut64 as = r_anal_function_linear_size ((RAnalFunction *) a);
 	ut64 bs = r_anal_function_linear_size ((RAnalFunction *) b);
@@ -4804,7 +4824,9 @@ R_API int r_core_anal_search_xrefs(RCore *core, ut64 from, ut64 to, PJ *pj, int 
 	}
 	const bool stateful = core->anal->opt.stateful;
 	const ut32 opmask = R_ARCH_OP_MASK_BASIC | R_ARCH_OP_MASK_HINT
-		| (stateful? R_ARCH_OP_MASK_STATEFUL: 0);
+		| (stateful? R_ARCH_OP_MASK_STATEFUL: 0)
+		| (r_core_anal_archbits_is_static (core)? R_ARCH_OP_MASK_NOARCHBITS: 0);
+	const bool has_meta = core->anal->meta.root || cfg_anal_strings;
 	if (stateful && core->anal->arch->session) {
 		// the whole sweep is one linear decode window
 		r_arch_session_reset (core->anal->arch->session);
@@ -4855,12 +4877,11 @@ R_API int r_core_anal_search_xrefs(RCore *core, ut64 from, ut64 to, PJ *pj, int 
 			}
 			uninit = false;
 		}
-		(void) r_anal_op (core->anal, &op, at, buf, bsz, opmask);
 		const int scan_end = bsz == left? bsz: bsz - maxopsz;
 		while (i < scan_end && !r_cons_is_breaked (core->cons)) {
 			r_anal_op_fini (&op);
 			// check if meta tells its code
-			{
+			if (has_meta) {
 				ut64 size;
 				RAnalMetaItem *mi = r_meta_get_at (core->anal, at + i, R_META_TYPE_ANY, &size);
 				if (mi) {
